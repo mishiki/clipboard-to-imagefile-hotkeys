@@ -1,11 +1,32 @@
 [CmdletBinding()]
 param(
     [ValidateSet('Gui', 'Start', 'Restart', 'Stop', 'Status')]
-    [string]$Action = 'Gui'
+    [string]$Action = 'Gui',
+    [switch]$HideConsole
 )
 
 Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Stop'
+
+Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+
+namespace ClipboardImageControl {
+    public static class NativeMethods {
+        [DllImport("kernel32.dll")]
+        public static extern IntPtr GetConsoleWindow();
+
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool SetForegroundWindow(IntPtr hWnd);
+    }
+}
+'@
 
 $mainScript = Join-Path $PSScriptRoot 'ClipboardImage.ps1'
 $powerShell = Join-Path $PSHOME 'powershell.exe'
@@ -69,6 +90,13 @@ function Restart-Utility {
 }
 
 function Show-ControlWindow {
+    if ($HideConsole) {
+        $consoleWindow = [ClipboardImageControl.NativeMethods]::GetConsoleWindow()
+        if ($consoleWindow -ne [IntPtr]::Zero) {
+            $null = [ClipboardImageControl.NativeMethods]::ShowWindow($consoleWindow, 0)
+        }
+    }
+
     Add-Type -AssemblyName System.Windows.Forms
     Add-Type -AssemblyName System.Drawing
     [System.Windows.Forms.Application]::EnableVisualStyles()
@@ -157,7 +185,11 @@ function Show-ControlWindow {
         catch { [System.Windows.Forms.MessageBox]::Show($_.Exception.Message, '停止エラー') | Out-Null }
     })
     $closeButton.Add_Click({ $form.Close() })
-    $form.Add_Shown({ Update-WindowState })
+    $form.Add_Shown({
+        Update-WindowState
+        $null = [ClipboardImageControl.NativeMethods]::SetForegroundWindow($form.Handle)
+        $form.Activate()
+    })
 
     [void]$form.ShowDialog()
 }

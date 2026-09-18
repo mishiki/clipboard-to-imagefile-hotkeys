@@ -26,7 +26,7 @@ if (-not (Test-Path -LiteralPath $startMenuDirectory)) {
 $shell = New-Object -ComObject WScript.Shell
 $shortcut = $shell.CreateShortcut((Join-Path $startMenuDirectory 'Clipboard Image Hotkeys.lnk'))
 $shortcut.TargetPath = $powerShell
-$shortcut.Arguments = '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -STA -File "{0}"' -f (Join-Path $installDirectory 'Control.ps1')
+$shortcut.Arguments = '-NoProfile -ExecutionPolicy Bypass -STA -File "{0}" -HideConsole' -f (Join-Path $installDirectory 'Control.ps1')
 $shortcut.WorkingDirectory = $installDirectory
 $shortcut.Description = 'Clipboard Image Hotkeys の起動・再起動・停止'
 $shortcut.Save()
