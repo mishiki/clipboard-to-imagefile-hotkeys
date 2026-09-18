@@ -33,6 +33,8 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Install.ps1
 
 実行ファイルを `%LOCALAPPDATA%\ClipboardImageHotkeys\` へコピーし、現在のユーザーの `Run` 登録へ追加します。次回ログオン時から非表示で起動し、インストール直後にも常駐を開始します。リポジトリのフォルダは後から移動・削除できます。
 
+スタートメニューに `Clipboard Image Hotkeys` が追加されます。開くと現在の稼働状態を確認し、起動・再起動・停止できます。
+
 自動起動だけ登録し、今すぐ起動しない場合:
 
 ```powershell

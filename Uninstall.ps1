@@ -8,6 +8,10 @@ $localMainScript = Join-Path $PSScriptRoot 'ClipboardImage.ps1'
 $mainScript = if (Test-Path -LiteralPath $installedMainScript) { $installedMainScript } else { $localMainScript }
 $runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
 Remove-ItemProperty -Path $runKey -Name 'ClipboardImageHotkeys' -ErrorAction SilentlyContinue
+$startMenuDirectory = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Clipboard Image Hotkeys'
+if (Test-Path -LiteralPath $startMenuDirectory) {
+    Remove-Item -LiteralPath $startMenuDirectory -Recurse -Force
+}
 
 & powershell.exe -NoProfile -ExecutionPolicy Bypass -STA -File $mainScript -Action Stop | Out-Null
 Start-Sleep -Milliseconds 300

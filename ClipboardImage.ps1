@@ -291,6 +291,16 @@ function Stop-Resident {
     if (-not (Test-Path -LiteralPath $script:StateFile)) { return $false }
     try {
         $state = Get-Content -LiteralPath $script:StateFile -Raw -Encoding UTF8 | ConvertFrom-Json
+        $process = Get-Process -Id $state.ProcessId -ErrorAction SilentlyContinue
+        if ($null -eq $process) {
+            Remove-Item -LiteralPath $script:StateFile -Force -ErrorAction SilentlyContinue
+            return $false
+        }
+        $stateStartedAt = [DateTimeOffset]::Parse([string]$state.StartedAt).LocalDateTime
+        if ([math]::Abs(($process.StartTime - $stateStartedAt).TotalMinutes) -ge 2) {
+            Remove-Item -LiteralPath $script:StateFile -Force -ErrorAction SilentlyContinue
+            return $false
+        }
         return [ClipboardImage.NativeMethods]::PostThreadMessage([uint32]$state.ThreadId, 0x0012, [UIntPtr]::Zero, [IntPtr]::Zero)
     } catch { return $false }
 }
@@ -374,8 +384,19 @@ switch ($Action) {
     'Open'    { Invoke-Open; Invoke-Cleanup }
     'Cleanup' { Invoke-Cleanup }
     'Status'  {
+        $running = $false
+        if (Test-Path -LiteralPath $script:StateFile) {
+            try {
+                $state = Get-Content -LiteralPath $script:StateFile -Raw -Encoding UTF8 | ConvertFrom-Json
+                $process = Get-Process -Id $state.ProcessId -ErrorAction SilentlyContinue
+                if ($null -ne $process) {
+                    $stateStartedAt = [DateTimeOffset]::Parse([string]$state.StartedAt).LocalDateTime
+                    $running = [math]::Abs(($process.StartTime - $stateStartedAt).TotalMinutes) -lt 2
+                }
+            } catch {}
+        }
         [pscustomobject]@{
-            Running = (Test-Path -LiteralPath $script:StateFile)
+            Running = $running
             StockCount = @(Get-StockPaths).Count
             PngCount = @(Get-ChildItem -LiteralPath $script:TempDirectory -Filter 'clip-*.png' -File).Count
             TempDirectory = $script:TempDirectory
