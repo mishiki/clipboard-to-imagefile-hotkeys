@@ -2,6 +2,8 @@
 
 Windowsのクリップボード画像を一時PNGへ変換し、ファイルとして貼り付け・ドラッグできるようにする小さな常駐PowerShellユーティリティです。
 
+Website: https://mishiki.github.io/clipboard-to-imagefile-hotkeys/
+
 ## ホットキー
 
 | ホットキー | 動作 |
