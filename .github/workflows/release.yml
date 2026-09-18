@@ -1,0 +1,28 @@
+name: Attach release ZIP
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  attach-zip:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+
+      - name: Build distribution ZIP
+        run: |
+          mkdir -p dist/clipboard-to-imagefile-hotkeys
+          cp ClipboardImage.ps1 Control.ps1 Install.ps1 Uninstall.ps1 README.md LICENSE dist/clipboard-to-imagefile-hotkeys/
+          cd dist
+          zip -r clipboard-to-imagefile-hotkeys.zip clipboard-to-imagefile-hotkeys
+
+      - name: Attach ZIP to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ github.event.release.tag_name }}" dist/clipboard-to-imagefile-hotkeys.zip --clobber
