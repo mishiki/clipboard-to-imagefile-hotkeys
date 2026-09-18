@@ -301,10 +301,10 @@
       <div>
         <p class="eyebrow">Windows / PowerShell / MIT</p>
         <h1>クリップボードの画像を自動的に画像ファイルにしてアップロードとかできるようにしてその後自動的に消してくれるツール</h1>
-        <p class="lead">クリップボード上の画像を一時PNGに変換。ファイルとして貼り付ける、複数枚まとめる、Explorerへ渡す等の操作を、キーボードショートカットから呼び出せます。</p>
+        <p class="lead">クリップボード上の画像を一時PNGファイルに変換。ファイルとしてブラウザなどに貼り付ける、複数枚まとめてExplorerへ渡す等の操作を、キーボードショートカットから呼び出せます。</p>
         <div class="actions">
           <a class="button" href="https://github.com/mishiki/clipboard-to-imagefile-hotkeys/archive/refs/heads/main.zip">ZIPをダウンロード</a>
-          <a class="button secondary" href="https://github.com/mishiki/clipboard-to-imagefile-hotkeys">ソースを見る</a>
+          <a class="button secondary" href="https://github.com/mishiki/clipboard-to-imagefile-hotkeys">より詳細な説明・ソースコードを見る</a>
         </div>
       </div>
 
@@ -363,13 +363,13 @@
         <div>
           <p class="eyebrow">Uninstall</p>
           <h2>アンインストール</h2>
-          <div class="requirements">常駐プロセス、スタートアップ登録、一時PNGをまとめて削除します。</div>
+          <div class="requirements">常駐プロセス解除、スタートアップ登録解除、一時PNGファイルを削除します。</div>
         </div>
         <ol class="steps">
           <li><strong>展開したフォルダで実行</strong>
             <pre><code>powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Uninstall.ps1</code></pre>
           </li>
-          <li><strong>一時PNGを残す場合</strong>
+          <li><strong>PNGファイルを消さずに残しておきたい場合</strong>
             <pre><code>.\Uninstall.ps1 -KeepTemporaryFiles</code></pre>
           </li>
         </ol>
@@ -379,7 +379,7 @@
 
   <footer class="wrap">
     <span>Clipboard Image Hotkeys · MIT License</span>
-    <a href="https://github.com/mishiki/clipboard-to-imagefile-hotkeys">GitHubでソースを見る</a>
+    <a href="https://github.com/mishiki/clipboard-to-imagefile-hotkeys">GitHubで詳細な説明を見る</a>
     <address>Author:<a href="https://x.com/mishiki">@mishiki</a></address>
   </footer>
 </body>
