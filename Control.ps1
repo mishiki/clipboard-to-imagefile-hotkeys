@@ -7,6 +7,15 @@ param(
 
 Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Stop'
+$controlLogFile = Join-Path $env:LOCALAPPDATA 'ClipboardImageHotkeys\Control.log'
+
+function Write-ControlLog {
+    param([string]$Message)
+    try {
+        $timestamp = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss.fff')
+        Add-Content -LiteralPath $controlLogFile -Value ('{0} PID={1} {2}' -f $timestamp, $PID, $Message) -Encoding UTF8
+    } catch {}
+}
 
 function Initialize-ControlNativeMethods {
     if ('ClipboardImageControl.NativeMethods' -as [type]) { return }
@@ -26,6 +35,9 @@ namespace ClipboardImageControl {
         [DllImport("user32.dll")]
         [return: MarshalAs(UnmanagedType.Bool)]
         public static extern bool SetForegroundWindow(IntPtr hWnd);
+
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+        public static extern IntPtr FindWindow(string lpClassName, string lpWindowName);
     }
 }
 '@
@@ -136,17 +148,22 @@ function Restart-Utility {
 }
 
 function Show-ControlWindow {
-    Initialize-ControlNativeMethods
-    if ($HideConsole) {
-        $consoleWindow = [ClipboardImageControl.NativeMethods]::GetConsoleWindow()
-        if ($consoleWindow -ne [IntPtr]::Zero) {
-            $null = [ClipboardImageControl.NativeMethods]::ShowWindow($consoleWindow, 0)
-        }
-    }
-
     Add-Type -AssemblyName System.Windows.Forms
     Add-Type -AssemblyName System.Drawing
     [System.Windows.Forms.Application]::EnableVisualStyles()
+
+    try {
+        Initialize-ControlNativeMethods
+        $existingWindow = [ClipboardImageControl.NativeMethods]::FindWindow($null, 'Clipboard Image Hotkeys')
+        if ($existingWindow -ne [IntPtr]::Zero) {
+            $null = [ClipboardImageControl.NativeMethods]::ShowWindow($existingWindow, 5)
+            $null = [ClipboardImageControl.NativeMethods]::SetForegroundWindow($existingWindow)
+            Write-ControlLog 'Existing control window activated.'
+            return
+        }
+    } catch {
+        Write-ControlLog ('Existing-window check failed; continuing with a new window: {0}' -f $_.Exception.Message)
+    }
 
     $form = New-Object System.Windows.Forms.Form
     $form.Text = 'Clipboard Image Hotkeys'
@@ -168,30 +185,36 @@ function Show-ControlWindow {
     $status.Font = New-Object System.Drawing.Font('Segoe UI Semibold', 13)
     $status.AutoSize = $true
     $status.Location = New-Object System.Drawing.Point(25, 64)
+    $status.Text = '● 状態確認中'
+    $status.ForeColor = [System.Drawing.Color]::DimGray
     $form.Controls.Add($status)
 
     $details = New-Object System.Windows.Forms.Label
     $details.AutoSize = $true
     $details.ForeColor = [System.Drawing.Color]::DimGray
     $details.Location = New-Object System.Drawing.Point(26, 96)
+    $details.Text = '常駐状態を確認しています。'
     $form.Controls.Add($details)
 
     $startButton = New-Object System.Windows.Forms.Button
     $startButton.Text = '起動'
     $startButton.Size = New-Object System.Drawing.Size(92, 38)
     $startButton.Location = New-Object System.Drawing.Point(25, 142)
+    $startButton.Enabled = $false
     $form.Controls.Add($startButton)
 
     $restartButton = New-Object System.Windows.Forms.Button
     $restartButton.Text = '再起動'
     $restartButton.Size = New-Object System.Drawing.Size(92, 38)
     $restartButton.Location = New-Object System.Drawing.Point(126, 142)
+    $restartButton.Enabled = $false
     $form.Controls.Add($restartButton)
 
     $stopButton = New-Object System.Windows.Forms.Button
     $stopButton.Text = '停止'
     $stopButton.Size = New-Object System.Drawing.Size(92, 38)
     $stopButton.Location = New-Object System.Drawing.Point(227, 142)
+    $stopButton.Enabled = $false
     $form.Controls.Add($stopButton)
 
     $closeButton = New-Object System.Windows.Forms.Button
@@ -219,29 +242,81 @@ function Show-ControlWindow {
         }
     }
 
+    function Update-WindowStateSafely {
+        try {
+            Update-WindowState
+        } catch {
+            $status.Text = '● 状態取得エラー'
+            $status.ForeColor = [System.Drawing.Color]::DarkOrange
+            $details.Text = $_.Exception.Message
+            $startButton.Enabled = $false
+            $restartButton.Enabled = $false
+            $stopButton.Enabled = $false
+            Write-ControlLog ('State refresh failed: {0}' -f $_.Exception.Message)
+        }
+    }
+
     $startButton.Add_Click({
-        try { Start-Utility; Update-WindowState }
-        catch { [System.Windows.Forms.MessageBox]::Show($_.Exception.Message, '起動エラー') | Out-Null }
+        try { Write-ControlLog 'Start clicked.'; Start-Utility; Update-WindowStateSafely }
+        catch { Write-ControlLog ('Start failed: {0}' -f $_.Exception.Message); [System.Windows.Forms.MessageBox]::Show($_.Exception.Message, '起動エラー') | Out-Null }
     })
     $restartButton.Add_Click({
-        try { Restart-Utility; Update-WindowState }
-        catch { [System.Windows.Forms.MessageBox]::Show($_.Exception.Message, '再起動エラー') | Out-Null }
+        try { Write-ControlLog 'Restart clicked.'; Restart-Utility; Update-WindowStateSafely }
+        catch { Write-ControlLog ('Restart failed: {0}' -f $_.Exception.Message); [System.Windows.Forms.MessageBox]::Show($_.Exception.Message, '再起動エラー') | Out-Null }
     })
     $stopButton.Add_Click({
-        try { Stop-Utility; Update-WindowState }
-        catch { [System.Windows.Forms.MessageBox]::Show($_.Exception.Message, '停止エラー') | Out-Null }
+        try { Write-ControlLog 'Stop clicked.'; Stop-Utility; Update-WindowStateSafely }
+        catch { Write-ControlLog ('Stop failed: {0}' -f $_.Exception.Message); [System.Windows.Forms.MessageBox]::Show($_.Exception.Message, '停止エラー') | Out-Null }
     })
     $closeButton.Add_Click({ $form.Close() })
-    $form.Add_Shown({
-        Update-WindowState
-        $null = [ClipboardImageControl.NativeMethods]::SetForegroundWindow($form.Handle)
-        $form.Activate()
+
+    $startupTimer = New-Object System.Windows.Forms.Timer
+    $startupTimer.Interval = 150
+    $startupTimer.Add_Tick({
+        param($sender, $eventArgs)
+        $sender.Stop()
+        try {
+            if ($HideConsole) {
+                Initialize-ControlNativeMethods
+                $consoleWindow = [ClipboardImageControl.NativeMethods]::GetConsoleWindow()
+                if ($consoleWindow -ne [IntPtr]::Zero) {
+                    $null = [ClipboardImageControl.NativeMethods]::ShowWindow($consoleWindow, 0)
+                }
+            }
+        } catch {
+            Write-ControlLog ('Console hide failed; leaving it visible: {0}' -f $_.Exception.Message)
+        }
+        Update-WindowStateSafely
+        try {
+            Initialize-ControlNativeMethods
+            $null = [ClipboardImageControl.NativeMethods]::SetForegroundWindow($form.Handle)
+            $form.Activate()
+        } catch {
+            Write-ControlLog ('Window activation failed: {0}' -f $_.Exception.Message)
+        }
     })
 
-    [void]$form.ShowDialog()
+    $statusTimer = New-Object System.Windows.Forms.Timer
+    $statusTimer.Interval = 2000
+    $statusTimer.Add_Tick({ Update-WindowStateSafely })
+
+    $form.Add_Shown({
+        Write-ControlLog 'Control window shown.'
+        $startupTimer.Start()
+        $statusTimer.Start()
+    })
+    $form.Add_FormClosed({
+        try { $startupTimer.Stop(); $statusTimer.Stop() } catch {}
+    })
+
+    [System.Windows.Forms.Application]::Run($form)
+    $startupTimer.Dispose()
+    $statusTimer.Dispose()
+    Write-ControlLog 'Control window closed.'
 }
 
 try {
+    Write-ControlLog ('Control started. Action={0}; HideConsole={1}' -f $Action, [bool]$HideConsole)
     $mainScript = Join-Path $PSScriptRoot 'ClipboardImage.ps1'
     $powerShell = Join-Path $PSHOME 'powershell.exe'
     if (-not (Test-Path -LiteralPath $powerShell)) { $powerShell = 'powershell.exe' }
@@ -257,6 +332,7 @@ try {
     }
 } catch {
     $message = $_.Exception.Message
+    Write-ControlLog ('Fatal error: {0}' -f $message)
     if ($Action -eq 'Gui') {
         Show-ControlError -Title 'Clipboard Image Hotkeys エラー' -Message $message
     } else {

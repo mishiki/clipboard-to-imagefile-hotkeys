@@ -9,6 +9,7 @@ $installDirectory = Join-Path $env:LOCALAPPDATA 'ClipboardImageHotkeys'
 $mainScript = Join-Path $installDirectory 'ClipboardImage.ps1'
 $powerShell = Join-Path $PSHOME 'powershell.exe'
 if (-not (Test-Path -LiteralPath $powerShell)) { $powerShell = 'powershell.exe' }
+$startupErrorFile = Join-Path $env:TEMP 'ClipboardImage\.startup-error.txt'
 
 & $powerShell -NoProfile -ExecutionPolicy Bypass -STA -File $sourceMainScript -Action Stop | Out-Null
 Start-Sleep -Milliseconds 300
@@ -31,14 +32,23 @@ $shortcut.WorkingDirectory = $installDirectory
 $shortcut.Description = 'Clipboard Image Hotkeys の起動・再起動・停止'
 $shortcut.Save()
 
-$command = '"{0}" -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -STA -File "{1}"' -f $powerShell, $mainScript
+$startupDirectory = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Startup'
+$startupShortcutPath = Join-Path $startupDirectory 'Clipboard Image Hotkeys.lnk'
+$startupShortcut = $shell.CreateShortcut($startupShortcutPath)
+$startupShortcut.TargetPath = $powerShell
+$startupShortcut.Arguments = '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -STA -File "{0}" -StartupErrorFile "{1}"' -f $mainScript, $startupErrorFile
+$startupShortcut.WorkingDirectory = $installDirectory
+$startupShortcut.Description = 'Clipboard Image Hotkeys をログオン時に起動'
+$startupShortcut.Save()
 
 $runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
-Set-ItemProperty -Path $runKey -Name 'ClipboardImageHotkeys' -Value $command
+Remove-ItemProperty -Path $runKey -Name 'ClipboardImageHotkeys' -ErrorAction SilentlyContinue
 
 if (-not $NoStart) {
+    Remove-Item -LiteralPath $startupErrorFile -Force -ErrorAction SilentlyContinue
     Start-Process -FilePath $powerShell -WindowStyle Hidden -ArgumentList @(
-        '-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-STA', '-File', ('"{0}"' -f $mainScript)
+        '-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-STA', '-File', ('"{0}"' -f $mainScript),
+        '-StartupErrorFile', ('"{0}"' -f $startupErrorFile)
     )
 }
 
