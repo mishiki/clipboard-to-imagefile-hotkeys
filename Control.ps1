@@ -8,7 +8,9 @@ param(
 Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Stop'
 
-Add-Type -TypeDefinition @'
+function Initialize-ControlNativeMethods {
+    if ('ClipboardImageControl.NativeMethods' -as [type]) { return }
+    Add-Type -TypeDefinition @'
 using System;
 using System.Runtime.InteropServices;
 
@@ -27,11 +29,30 @@ namespace ClipboardImageControl {
     }
 }
 '@
+}
 
-$mainScript = Join-Path $PSScriptRoot 'ClipboardImage.ps1'
-$powerShell = Join-Path $PSHOME 'powershell.exe'
-if (-not (Test-Path -LiteralPath $powerShell)) { $powerShell = 'powershell.exe' }
-$stateFile = Join-Path $env:TEMP 'ClipboardImage\.resident.json'
+function Show-ControlError {
+    param(
+        [string]$Title,
+        [string]$Message
+    )
+    try {
+        Add-Type -AssemblyName System.Windows.Forms -ErrorAction Stop
+        [System.Windows.Forms.MessageBox]::Show(
+            $Message,
+            $Title,
+            [System.Windows.Forms.MessageBoxButtons]::OK,
+            [System.Windows.Forms.MessageBoxIcon]::Error
+        ) | Out-Null
+    } catch {
+        try {
+            $shell = New-Object -ComObject WScript.Shell
+            $null = $shell.Popup($Message, 0, $Title, 16)
+        } catch {
+            [Console]::Error.WriteLine('{0}: {1}' -f $Title, $Message)
+        }
+    }
+}
 
 function Get-UtilityState {
     $result = [ordered]@{
@@ -60,13 +81,36 @@ function Get-UtilityState {
 
 function Start-Utility {
     if ((Get-UtilityState).Running) { return }
+    $stateDirectory = Split-Path -Parent $stateFile
+    if (-not (Test-Path -LiteralPath $stateDirectory)) {
+        $null = New-Item -ItemType Directory -Path $stateDirectory
+    }
     Remove-Item -LiteralPath $stateFile -Force -ErrorAction SilentlyContinue
-    Start-Process -FilePath $powerShell -WindowStyle Hidden -ArgumentList @(
-        '-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-STA', '-File', ('"{0}"' -f $mainScript)
+    Remove-Item -LiteralPath $startErrorFile -Force -ErrorAction SilentlyContinue
+    $process = Start-Process -FilePath $powerShell -WindowStyle Hidden -PassThru -ArgumentList @(
+        '-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-STA', '-File', ('"{0}"' -f $mainScript),
+        '-StartupErrorFile', ('"{0}"' -f $startErrorFile)
     )
     $deadline = (Get-Date).AddSeconds(5)
     while (-not (Get-UtilityState).Running -and (Get-Date) -lt $deadline) {
+        if ($process.HasExited) { break }
         Start-Sleep -Milliseconds 100
+    }
+    if (-not (Get-UtilityState).Running) {
+        $detail = ''
+        if ($process.HasExited) {
+            $process.WaitForExit()
+            if (Test-Path -LiteralPath $startErrorFile) {
+                $capturedError = Get-Content -LiteralPath $startErrorFile -Raw -ErrorAction SilentlyContinue
+                if ($null -ne $capturedError) { $detail = $capturedError.Trim() }
+            }
+            if ([string]::IsNullOrWhiteSpace($detail)) {
+                $detail = '常駐プロセスは終了コード {0} で終了しました。' -f $process.ExitCode
+            }
+        } else {
+            $detail = '常駐プロセスは起動していますが、5秒以内に稼働状態を確認できませんでした。'
+        }
+        throw "Clipboard Image Hotkeysを起動できませんでした。`r`n`r`n$detail"
     }
 }
 
@@ -81,6 +125,8 @@ function Stop-Utility {
     }
     if (-not (Get-UtilityState).Running) {
         Remove-Item -LiteralPath $stateFile -Force -ErrorAction SilentlyContinue
+    } else {
+        throw 'Clipboard Image Hotkeysを5秒以内に停止できませんでした。'
     }
 }
 
@@ -90,6 +136,7 @@ function Restart-Utility {
 }
 
 function Show-ControlWindow {
+    Initialize-ControlNativeMethods
     if ($HideConsole) {
         $consoleWindow = [ClipboardImageControl.NativeMethods]::GetConsoleWindow()
         if ($consoleWindow -ne [IntPtr]::Zero) {
@@ -194,10 +241,26 @@ function Show-ControlWindow {
     [void]$form.ShowDialog()
 }
 
-switch ($Action) {
-    'Gui'     { Show-ControlWindow }
-    'Start'   { Start-Utility; Get-UtilityState }
-    'Restart' { Restart-Utility; Get-UtilityState }
-    'Stop'    { Stop-Utility; Get-UtilityState }
-    'Status'  { Get-UtilityState }
+try {
+    $mainScript = Join-Path $PSScriptRoot 'ClipboardImage.ps1'
+    $powerShell = Join-Path $PSHOME 'powershell.exe'
+    if (-not (Test-Path -LiteralPath $powerShell)) { $powerShell = 'powershell.exe' }
+    $stateFile = Join-Path $env:TEMP 'ClipboardImage\.resident.json'
+    $startErrorFile = Join-Path $env:TEMP 'ClipboardImage\.start-error.txt'
+
+    switch ($Action) {
+        'Gui'     { Show-ControlWindow }
+        'Start'   { Start-Utility; Get-UtilityState }
+        'Restart' { Restart-Utility; Get-UtilityState }
+        'Stop'    { Stop-Utility; Get-UtilityState }
+        'Status'  { Get-UtilityState }
+    }
+} catch {
+    $message = $_.Exception.Message
+    if ($Action -eq 'Gui') {
+        Show-ControlError -Title 'Clipboard Image Hotkeys エラー' -Message $message
+    } else {
+        [Console]::Error.WriteLine($message)
+    }
+    exit 1
 }

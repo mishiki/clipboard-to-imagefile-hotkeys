@@ -4,8 +4,25 @@ param(
     [string]$Action = 'Run',
     [int]$MaxAgeHours = 24,
     [int]$MaxFiles = 100,
-    [switch]$SuppressExplorer
+    [switch]$SuppressExplorer,
+    [string]$StartupErrorFile
 )
+
+trap {
+    $errorText = ($_ | Out-String).Trim()
+    if (-not [string]::IsNullOrWhiteSpace($StartupErrorFile)) {
+        try {
+            $errorDirectory = Split-Path -Parent $StartupErrorFile
+            if ($errorDirectory -and -not (Test-Path -LiteralPath $errorDirectory)) {
+                $null = New-Item -ItemType Directory -Path $errorDirectory
+            }
+            $errorText | Set-Content -LiteralPath $StartupErrorFile -Encoding UTF8
+        } catch {}
+    } else {
+        [Console]::Error.WriteLine($errorText)
+    }
+    exit 1
+}
 
 Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Stop'
