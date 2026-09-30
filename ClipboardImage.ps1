@@ -223,6 +223,13 @@ function Show-ControlError {
     }
 }
 
+function Hide-ConsoleWindow {
+    $consoleWindow = [ClipboardImage.NativeMethods]::GetConsoleWindow()
+    if ($consoleWindow -ne [IntPtr]::Zero) {
+        $null = [ClipboardImage.NativeMethods]::ShowWindow($consoleWindow, 0)
+    }
+}
+
 function Get-UtilityState {
     $result = [ordered]@{
         Running = $false
@@ -253,9 +260,9 @@ function Start-Utility {
     Initialize-Storage
     Remove-Item -LiteralPath $script:StateFile -Force -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath $script:StartErrorFile -Force -ErrorAction SilentlyContinue
-    $process = Start-Process -FilePath $script:PowerShellExecutable -WindowStyle Hidden -PassThru -ArgumentList @(
-        '-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-STA', '-File', ('"{0}"' -f $script:MainScriptPath),
-        '-NoWindow', '-StartupErrorFile', ('"{0}"' -f $script:StartErrorFile)
+    $process = Start-Process -FilePath $script:PowerShellExecutable -PassThru -ArgumentList @(
+        '-NoProfile', '-ExecutionPolicy', 'Bypass', '-STA', '-File', ('"{0}"' -f $script:MainScriptPath),
+        '-NoWindow', '-HideConsole', '-StartupErrorFile', ('"{0}"' -f $script:StartErrorFile)
     )
     $deadline = (Get-Date).AddSeconds(5)
     while (-not (Get-UtilityState).Running -and (Get-Date) -lt $deadline) {
@@ -424,10 +431,7 @@ function Show-ControlWindow {
         $sender.Stop()
         try {
             if ($HideConsole) {
-                $consoleWindow = [ClipboardImage.NativeMethods]::GetConsoleWindow()
-                if ($consoleWindow -ne [IntPtr]::Zero) {
-                    $null = [ClipboardImage.NativeMethods]::ShowWindow($consoleWindow, 0)
-                }
+                Hide-ConsoleWindow
             }
         } catch {
             Write-ControlLog ('Console hide failed; leaving it visible: {0}' -f $_.Exception.Message)
@@ -686,7 +690,13 @@ Initialize-Storage
 switch ($Action) {
     'Run'     {
         if ($NoWindow) {
-            Start-Resident
+            if ((Get-UtilityState).Running) {
+                Write-ControlLog ('Resident already running; showing control window. HideConsole={0}' -f [bool]$HideConsole)
+                Show-ControlWindow
+            } else {
+                if ($HideConsole) { Hide-ConsoleWindow }
+                Start-Resident
+            }
         } else {
             try {
                 Write-ControlLog ('Control started from main script. HideConsole={0}' -f [bool]$HideConsole)
