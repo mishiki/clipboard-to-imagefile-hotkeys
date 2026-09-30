@@ -31,7 +31,7 @@ PowerShellでこのフォルダへ移動し、次を実行します。
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Install.ps1
 ```
 
-実行ファイルを `%LOCALAPPDATA%\ClipboardImageHotkeys\` へコピーし、現在のユーザーのスタートアップフォルダーへ起動用ショートカットを追加します。次回ログオン時から非表示で起動し、インストール直後にも常駐を開始します。リポジトリのフォルダは後から移動・削除できます。
+実行ファイルを `%LOCALAPPDATA%\ClipboardImageHotkeys\` へコピーし、現在のユーザーのスタートアップフォルダーへ `-NoWindow` 付きの起動用ショートカットを追加します。次回ログオン時から管理画面を出さずに起動し、インストール直後にも常駐を開始します。リポジトリのフォルダは後から移動・削除できます。
 
 スタートメニューに `Clipboard Image Hotkeys` が追加されます。開くと現在の稼働状態を確認し、起動・再起動・停止できます。
 
@@ -43,8 +43,16 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Install.ps1
 
 ## 手動実行
 
+管理画面を開く:
+
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -STA -File .\ClipboardImage.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -STA -File .\ClipboardImage.ps1
+```
+
+管理画面を開かずに常駐を開始する:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -STA -File .\ClipboardImage.ps1 -NoWindow
 ```
 
 状態確認:

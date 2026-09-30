@@ -4,7 +4,6 @@ param([switch]$NoStart)
 $ErrorActionPreference = 'Stop'
 $sourceMainScript = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot 'ClipboardImage.ps1')).Path
 $sourceUninstallScript = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot 'Uninstall.ps1')).Path
-$sourceControlScript = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot 'Control.ps1')).Path
 $installDirectory = Join-Path $env:LOCALAPPDATA 'ClipboardImageHotkeys'
 $mainScript = Join-Path $installDirectory 'ClipboardImage.ps1'
 $powerShell = Join-Path $PSHOME 'powershell.exe'
@@ -18,7 +17,7 @@ if (-not (Test-Path -LiteralPath $installDirectory)) {
 }
 Copy-Item -LiteralPath $sourceMainScript -Destination $mainScript -Force
 Copy-Item -LiteralPath $sourceUninstallScript -Destination (Join-Path $installDirectory 'Uninstall.ps1') -Force
-Copy-Item -LiteralPath $sourceControlScript -Destination (Join-Path $installDirectory 'Control.ps1') -Force
+Remove-Item -LiteralPath (Join-Path $installDirectory 'Control.ps1') -Force -ErrorAction SilentlyContinue
 
 $startMenuDirectory = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Clipboard Image Hotkeys'
 if (-not (Test-Path -LiteralPath $startMenuDirectory)) {
@@ -27,7 +26,7 @@ if (-not (Test-Path -LiteralPath $startMenuDirectory)) {
 $shell = New-Object -ComObject WScript.Shell
 $shortcut = $shell.CreateShortcut((Join-Path $startMenuDirectory 'Clipboard Image Hotkeys.lnk'))
 $shortcut.TargetPath = $powerShell
-$shortcut.Arguments = '-NoProfile -ExecutionPolicy Bypass -STA -File "{0}" -HideConsole' -f (Join-Path $installDirectory 'Control.ps1')
+$shortcut.Arguments = '-NoProfile -ExecutionPolicy Bypass -STA -File "{0}" -HideConsole' -f $mainScript
 $shortcut.WorkingDirectory = $installDirectory
 $shortcut.Description = 'Clipboard Image Hotkeys の起動・再起動・停止'
 $shortcut.Save()
@@ -36,7 +35,7 @@ $startupDirectory = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Program
 $startupShortcutPath = Join-Path $startupDirectory 'Clipboard Image Hotkeys.lnk'
 $startupShortcut = $shell.CreateShortcut($startupShortcutPath)
 $startupShortcut.TargetPath = $powerShell
-$startupShortcut.Arguments = '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -STA -File "{0}" -StartupErrorFile "{1}"' -f $mainScript, $startupErrorFile
+$startupShortcut.Arguments = '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -STA -File "{0}" -NoWindow -StartupErrorFile "{1}"' -f $mainScript, $startupErrorFile
 $startupShortcut.WorkingDirectory = $installDirectory
 $startupShortcut.Description = 'Clipboard Image Hotkeys をログオン時に起動'
 $startupShortcut.Save()
@@ -48,7 +47,7 @@ if (-not $NoStart) {
     Remove-Item -LiteralPath $startupErrorFile -Force -ErrorAction SilentlyContinue
     Start-Process -FilePath $powerShell -WindowStyle Hidden -ArgumentList @(
         '-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-STA', '-File', ('"{0}"' -f $mainScript),
-        '-StartupErrorFile', ('"{0}"' -f $startupErrorFile)
+        '-NoWindow', '-StartupErrorFile', ('"{0}"' -f $startupErrorFile)
     )
 }
 

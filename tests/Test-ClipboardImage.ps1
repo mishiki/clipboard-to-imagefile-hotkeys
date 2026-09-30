@@ -29,7 +29,7 @@ function Get-DropFiles {
 Remove-Item -LiteralPath (Join-Path $tempDirectory '.stock.txt') -Force -ErrorAction SilentlyContinue
 
 $process = Start-Process -FilePath powershell.exe -WindowStyle Hidden -PassThru -ArgumentList @(
-    '-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-STA', '-File', ('"{0}"' -f $mainScript)
+    '-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-STA', '-File', ('"{0}"' -f $mainScript), '-NoWindow'
 )
 
 try {
