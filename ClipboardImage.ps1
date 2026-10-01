@@ -70,6 +70,10 @@ namespace ClipboardImage {
         [DllImport("kernel32.dll")]
         public static extern IntPtr GetConsoleWindow();
 
+        [DllImport("kernel32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool FreeConsole();
+
         [DllImport("user32.dll")]
         [return: MarshalAs(UnmanagedType.Bool)]
         public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
@@ -226,7 +230,7 @@ function Show-ControlError {
 function Hide-ConsoleWindow {
     $consoleWindow = [ClipboardImage.NativeMethods]::GetConsoleWindow()
     if ($consoleWindow -ne [IntPtr]::Zero) {
-        $null = [ClipboardImage.NativeMethods]::ShowWindow($consoleWindow, 0)
+        $null = [ClipboardImage.NativeMethods]::FreeConsole()
     }
 }
 
