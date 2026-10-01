@@ -265,7 +265,7 @@ function Start-Utility {
     Remove-Item -LiteralPath $script:StateFile -Force -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath $script:StartErrorFile -Force -ErrorAction SilentlyContinue
     $process = Start-Process -FilePath $script:PowerShellExecutable -PassThru -ArgumentList @(
-        '-NoProfile', '-ExecutionPolicy', 'Bypass', '-STA', '-File', ('"{0}"' -f $script:MainScriptPath),
+        '-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-STA', '-File', ('"{0}"' -f $script:MainScriptPath),
         '-NoWindow', '-HideConsole', '-StartupErrorFile', ('"{0}"' -f $script:StartErrorFile)
     )
     $deadline = (Get-Date).AddSeconds(5)
