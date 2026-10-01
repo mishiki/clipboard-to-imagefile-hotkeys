@@ -482,13 +482,68 @@ function Invoke-ClipboardOperation {
 }
 
 function Get-ClipboardBitmap {
-    $image = Invoke-ClipboardOperation {
-        if (-not [System.Windows.Forms.Clipboard]::ContainsImage()) { return $null }
-        [System.Windows.Forms.Clipboard]::GetImage()
+    Invoke-ClipboardOperation {
+        $dataObject = [System.Windows.Forms.Clipboard]::GetDataObject()
+        ConvertFrom-ClipboardDataObject -DataObject $dataObject
     }
-    if ($null -eq $image) { return $null }
-    try { return New-Object System.Drawing.Bitmap $image }
-    finally { $image.Dispose() }
+}
+
+function ConvertFrom-ClipboardDataObject {
+    param([System.Windows.Forms.IDataObject]$DataObject)
+    if ($null -eq $DataObject) { return $null }
+
+    if ($DataObject.GetDataPresent('PNG', $false)) {
+        $pngStream = $null
+        $sourcePngStream = $null
+        $ownedPngStream = $false
+        $restorePngPosition = $false
+        $pngPosition = 0
+        $image = $null
+        try {
+            $pngData = $DataObject.GetData('PNG', $false)
+            if ($pngData -is [byte[]]) {
+                $pngStream = New-Object System.IO.MemoryStream
+                $pngStream.Write($pngData, 0, $pngData.Length)
+                $pngStream.Position = 0
+                $ownedPngStream = $true
+            } elseif ($pngData -is [System.IO.Stream]) {
+                $sourcePngStream = $pngData
+                if (-not $sourcePngStream.CanRead) { throw 'PNG clipboard stream is not readable.' }
+                if ($sourcePngStream.CanSeek) {
+                    $pngPosition = $sourcePngStream.Position
+                    $sourcePngStream.Position = 0
+                    $restorePngPosition = $true
+                    $pngStream = $sourcePngStream
+                } else {
+                    $pngStream = New-Object System.IO.MemoryStream
+                    $sourcePngStream.CopyTo($pngStream)
+                    $pngStream.Position = 0
+                    $ownedPngStream = $true
+                }
+            } else {
+                throw 'Unsupported PNG clipboard data.'
+            }
+
+            $image = [System.Drawing.Image]::FromStream($pngStream, $true, $true)
+            $rectangle = [System.Drawing.Rectangle]::FromLTRB(0, 0, $image.Width, $image.Height)
+            return $image.Clone($rectangle, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
+        } catch {
+            # Some applications publish an invalid or unsupported PNG flavor alongside a usable bitmap.
+        } finally {
+            if ($null -ne $image) { $image.Dispose() }
+            if ($restorePngPosition) {
+                try { $sourcePngStream.Position = $pngPosition } catch { }
+            }
+            if ($ownedPngStream -and $null -ne $pngStream) { $pngStream.Dispose() }
+        }
+    }
+
+    $bitmapFormat = [System.Windows.Forms.DataFormats]::Bitmap
+    if (-not $DataObject.GetDataPresent($bitmapFormat, $true)) { return $null }
+    $bitmapImage = $DataObject.GetData($bitmapFormat, $true)
+    if ($null -eq $bitmapImage) { return $null }
+    $rectangle = [System.Drawing.Rectangle]::FromLTRB(0, 0, $bitmapImage.Width, $bitmapImage.Height)
+    return $bitmapImage.Clone($rectangle, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
 }
 
 function Save-BitmapTemporary {
@@ -510,7 +565,18 @@ function Set-ClipboardFileDrop {
     $data = New-Object System.Windows.Forms.DataObject
     $data.SetFileDropList($files)
     if ($null -ne $Bitmap) { $data.SetImage($Bitmap) }
-    Invoke-ClipboardOperation { [System.Windows.Forms.Clipboard]::SetDataObject($data, $true) }
+    $pngStream = $null
+    try {
+        if ($null -ne $Bitmap) {
+            $pngStream = New-Object System.IO.MemoryStream
+            $Bitmap.Save($pngStream, [System.Drawing.Imaging.ImageFormat]::Png)
+            $pngStream.Position = 0
+            $data.SetData('PNG', $false, $pngStream)
+        }
+        Invoke-ClipboardOperation { [System.Windows.Forms.Clipboard]::SetDataObject($data, $true) }
+    } finally {
+        if ($null -ne $pngStream) { $pngStream.Dispose() }
+    }
 }
 
 function Get-StockPaths {

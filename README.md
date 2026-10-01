@@ -15,6 +15,8 @@ Website: https://mishiki.github.io/clipboard-to-imagefile-hotkeys/
 
 `Ctrl + Shift + Alt + V` ではFileDropListを優先しつつ、可能な場合は画像形式も同じクリップボードデータに含めます。ストックは公開成功後に消費されます。
 
+After Effectsの「フレームをクリップボードにコピー」など、PNG形式を含む画像はPNGを優先して読み取り、透明度を保ってファイル化します。変換後のクリップボードにはPNG形式も含めます。PNG形式がない場合は通常のビットマップ形式を使用します。
+
 PNGは `%TEMP%\ClipboardImage\` に保存されます。24時間を超えたファイルを削除し、残りが100枚を超える場合は古いものから削除します。整理は起動時と各操作後に実行されます。
 
 ## 必要環境
